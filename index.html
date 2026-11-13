@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Context Layer MVP</title>
+<style>
+:root{--bg:#eef1f5;--panel:#fff;--ink:#17202e;--mute:#5d6878;--line:#d9dfe8;--acc:#1f5fbf;--accbg:#e3edfb;--warn:#a85a00;--warnbg:#fff0d9;--slack:#7a3fb0;--email:#c2410c;--cal:#0f7b5f;--notes:#8a6d00;--web:#0b6e99;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141c;--panel:#18202c;--ink:#e6ebf3;--mute:#93a0b4;--line:#2a3445;--acc:#7fb0ff;--accbg:#1c2e4a;--warn:#ffb866;--warnbg:#3a2a12;--slack:#c79bf0;--email:#ff9a6b;--cal:#5fd3b0;--notes:#e6c75c;--web:#6cc7ee}}
+:root[data-theme="dark"]{--bg:#0f141c;--panel:#18202c;--ink:#e6ebf3;--mute:#93a0b4;--line:#2a3445;--acc:#7fb0ff;--accbg:#1c2e4a;--warn:#ffb866;--warnbg:#3a2a12;--slack:#c79bf0;--email:#ff9a6b;--cal:#5fd3b0;--notes:#e6c75c;--web:#6cc7ee}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1,h2{font-family:"Iowan Old Style",Georgia,serif;font-weight:600;margin:0}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 40px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+h1{font-size:24px}
+.sub{color:var(--mute);font-size:13px;margin-top:2px}
+input,textarea,select,button{font:inherit;color:inherit}
+input[type=search]{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-top:14px}
+@media (max-width:800px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.panel h2{font-size:17px;margin-bottom:10px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px;align-items:center}
+.tabs span{color:var(--mute);font-size:13px;margin-right:4px}
+.tab{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;cursor:pointer}
+.tab[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:var(--bg)}
+.deadline{display:flex;gap:10px;align-items:center;background:var(--warnbg);color:var(--warn);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-weight:600}
+.ppl{color:var(--mute);font-size:13px;margin-bottom:12px}
+.item{border-left:3px solid var(--c,var(--line));padding:2px 0 2px 12px;margin:0 0 14px}
+.meta{font-size:12px;color:var(--mute);display:flex;gap:8px;flex-wrap:wrap}
+.src{color:var(--c);font-weight:700}
+.txt{margin-top:2px;overflow-wrap:anywhere}
+.tag{color:var(--acc);font-weight:600}.who{color:var(--cal);font-weight:600}
+.act{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+.act:first-of-type{border-top:0}
+.act input{margin-top:5px;accent-color:var(--acc)}
+.act.done .at{text-decoration:line-through;color:var(--mute)}
+.due{font-size:12px;color:var(--warn);font-weight:600}
+.pill{font-size:12px;background:var(--accbg);color:var(--acc);border-radius:6px;padding:1px 7px}
+textarea{width:100%;min-height:80px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);resize:vertical}
+.row{display:flex;gap:8px;margin-top:8px}
+select{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+button.go{flex:1;background:var(--acc);color:var(--bg);border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer}
+button.lnk{background:none;border:0;color:var(--mute);cursor:pointer;font-size:13px;text-decoration:underline;padding:0}
+.hint{font-size:12px;color:var(--mute);margin-top:6px}
+.empty{color:var(--mute)}
+kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<div><h1>Context Layer</h1><div class="sub">Scattered messages, mail, events and notes, linked by project. Open a project and see everything about it.</div></div>
+<button class="lnk" id="reset">Reset demo data</button>
+</header>
+<input type="search" id="q" placeholder="Ask anything: “API structure last Tuesday”, “who is @priya”, “deadline”" aria-label="Search all sources">
+<div class="tabs" id="tabs"></div>
+<div class="grid">
+<main>
+<div class="panel" id="hud" aria-live="polite"></div>
+</main>
+<aside>
+<div class="panel"><h2>Capture</h2>
+<textarea id="cap" placeholder="Paste a message, email or note. Use #project and @person to link it."></textarea>
+<div class="row"><select id="src" aria-label="Source"><option>Slack</option><option>Email</option><option>Calendar</option><option>Notes</option><option>Web</option></select><button class="go" id="add">Add to context</button></div>
+<div class="hint">Shortcut: <kbd>Alt</kbd>+<kbd>C</kbd> jumps here. Deadlines and tasks are detected automatically.</div></div>
+<div class="panel"><h2>Action queue</h2><div id="acts"></div></div>
+</aside>
+</div>
+</div>
+<script>
+var DAY=864e5, SRC={Slack:'--slack',Email:'--email',Calendar:'--cal',Notes:'--notes',Web:'--web'};
+var WD=['sun','mon','tue','wed','thu','fri','sat'], MO=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+var STOP='a an the of to in on for and or is are was we what did our my about from with at by it this that who when how do does decide decided last'.split(' ');
+var state={items:[],done:{},active:null,seq:0};
+function day0(t){var d=new Date(t);d.setHours(0,0,0,0);return d.getTime()}
+function esc(s){return s.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function fmt(t){return new Date(t).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+function ago(d,h){return Date.now()-d*DAY-(h||0)*36e5}
+
+function extract(text,ts){
+  var people=uniq((text.match(/@\w+/g)||[]).map(function(s){return s.toLowerCase()}));
+  var projects=uniq((text.match(/#[\w-]+/g)||[]).map(function(s){return s.toLowerCase()}));
+  var due=null,m,base=day0(ts);
+  if(m=text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/))due=new Date(+m[1],m[2]-1,+m[3]).getTime();
+  else if(m=text.match(/\b(?:by|due|on|before)\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\b/i)){var y=new Date(ts).getFullYear();due=new Date(y,MO.indexOf(m[1].toLowerCase()),+m[2]).getTime()}
+  else if(m=text.match(/\b(?:by|due|on|before|this)\s+(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b/i)){var w=WD.indexOf(m[1].toLowerCase()),diff=(w-new Date(base).getDay()+7)%7;due=base+(diff||7)*DAY}
+  else if(/\btomorrow\b/i.test(text))due=base+DAY;
+  var actions=text.split(/(?<=[.!?])\s+|\n/).filter(function(s){return /\b(todo|need to|needs to|must|please|should|can you|follow up|remember to)\b/i.test(s)}).map(function(s){return s.trim()});
+  return{people:people,projects:projects,due:due,actions:actions};
+}
+function uniq(a){return a.filter(function(x,i){return a.indexOf(x)===i})}
+function add(src,text,ts){var it={id:++state.seq,src:src,text:text,ts:ts||Date.now()};it.e=extract(text,it.ts);state.items.push(it);return it}
+
+function seed(){
+  state={items:[],done:{},active:'#apollo',seq:0};
+  add('Email','From @priya: Attached Apollo_Spec_v2.pdf. Please review the API structure section before the design review. #apollo',ago(5));
+  add('Slack','@priya @rahul we decided to use REST with cursor pagination for the API structure instead of GraphQL. #apollo',ago(4,2));
+  add('Calendar','Apollo design review. Final spec due 2026-11-20. #apollo @priya @rahul',ago(4));
+  add('Web','Saved: cursor pagination best practices article. #apollo',ago(2,3));
+  add('Notes','Need to write the migration script for the users table. Must benchmark pagination before the review. #apollo',ago(2));
+  add('Slack','@rahul can you update the pricing page copy by Friday? #website',ago(1));
+  add('Email','@meera vendor invoice arrived. Please pay by Nov 15. #finance',ago(3));
+  save();
+}
+function save(){try{localStorage.setItem('ctx-mvp-v1',JSON.stringify(state))}catch(e){}}
+function load(){try{var s=localStorage.getItem('ctx-mvp-v1');if(s){var o=JSON.parse(s);if(o&&o.items&&o.items.length){state=o;return true}}}catch(e){}return false}
+
+function hl(t){return esc(t).replace(/(#[\w-]+)/g,'<span class="tag">$1</span>').replace(/(@\w+)/g,'<span class="who">$1</span>')}
+function itemHTML(it){return '<div class="item" style="--c:var('+SRC[it.src]+')"><div class="meta"><span class="src">'+it.src+'</span><span>'+fmt(it.ts)+'</span></div><div class="txt">'+hl(it.text)+'</div></div>'}
+function allProjects(){var p=[];state.items.forEach(function(i){p=p.concat(i.e.projects)});return uniq(p)}
+function actionsOf(items){var out=[];items.forEach(function(it){it.e.actions.forEach(function(a,i){out.push({key:it.id+':'+i,text:a,due:it.e.due,it:it})})});
+  return out.sort(function(a,b){return (state.done[a.key]?1:0)-(state.done[b.key]?1:0)||(a.due||9e15)-(b.due||9e15)})}
+
+function tokens(q){return q.toLowerCase().replace(/[^\w@# -]/g,' ').split(/\s+/).filter(function(w){return w&&STOP.indexOf(w)<0}).map(function(w){return w.length>3?w.replace(/s$/,''):w})}
+function search(q){
+  var low=q.toLowerCase(),filter=null,m,today=day0(Date.now());
+  if(m=low.match(/last (sun|mon|tue|wed|thu|fri|sat)[a-z]*/)){var w=WD.indexOf(m[1]),d=(new Date(today).getDay()-w+7)%7||7;var t=today-d*DAY;filter=function(it){return day0(it.ts)===t};low=low.replace(m[0],' ')}
+  else if(/yesterday/.test(low)){filter=function(it){return day0(it.ts)===today-DAY};low=low.replace('yesterday',' ')}
+  else if(/\btoday\b/.test(low)){filter=function(it){return day0(it.ts)===today};low=low.replace('today',' ')}
+  else if(/last week|this week/.test(low)){filter=function(it){return it.ts>Date.now()-7*DAY};low=low.replace(/last week|this week/,' ')}
+  var tk=tokens(low);
+  return state.items.map(function(it){
+    if(filter&&!filter(it))return null;
+    var tx=it.text.toLowerCase(),s=0;
+    tk.forEach(function(w){if(tx.indexOf(w)>=0)s+=1;if(it.e.people.concat(it.e.projects).indexOf(w)>=0)s+=2;if(w==='deadline'&&it.e.due)s+=2;if(/task|todo|action/.test(w)&&it.e.actions.length)s+=2});
+    return(tk.length&&!s)?null:{it:it,s:s}
+  }).filter(Boolean).sort(function(a,b){return b.s-a.s||b.it.ts-a.it.ts}).map(function(r){return r.it});
+}
+
+function actRow(a){var d=!!state.done[a.key];
+  return '<label class="act'+(d?' done':'')+'"><input type="checkbox" data-k="'+a.key+'"'+(d?' checked':'')+'><span><span class="at">'+hl(a.text)+'</span><br><span class="meta"><span>'+a.it.src+'</span>'+(a.due?'<span class="due">Due '+fmt(a.due)+'</span>':'')+'</span></span></label>'}
+
+function render(){
+  var q=document.getElementById('q').value.trim(),projs=allProjects(),h='';
+  if(!state.active||projs.indexOf(state.active)<0)state.active=projs[0]||null;
+  document.getElementById('tabs').innerHTML='<span>Working on</span>'+projs.map(function(p){return '<button class="tab" aria-pressed="'+(p===state.active&&!q)+'" data-p="'+p+'">'+esc(p)+'</button>'}).join('');
+  var hud=document.getElementById('hud');
+  if(q){
+    var r=search(q);
+    h='<h2>'+r.length+' result'+(r.length===1?'':'s')+' across all sources</h2>'+(r.length?r.map(itemHTML).join(''):'<div class="empty">Nothing matched. Try a person, a #project, or fewer words.</div>');
+  }else if(state.active){
+    var its=state.items.filter(function(i){return i.e.projects.indexOf(state.active)>=0}).sort(function(a,b){return b.ts-a.ts});
+    var dues=its.map(function(i){return i.e.due}).filter(function(d){return d&&d>=day0(Date.now())}).sort(),ppl=[];
+    its.forEach(function(i){ppl=ppl.concat(i.e.people)});ppl=uniq(ppl);
+    var acts=actionsOf(its);
+    h='<h2>'+esc(state.active)+'</h2>';
+    if(dues.length)h+='<div class="deadline">Next deadline: '+fmt(dues[0])+'</div>';
+    if(ppl.length)h+='<div class="ppl">People involved: '+ppl.map(function(p){return '<span class="who">'+esc(p)+'</span>'}).join(', ')+'</div>';
+    h+=its.map(itemHTML).join('')+(acts.length?'<h2 style="margin-top:8px">Open tasks here</h2>'+acts.map(actRow).join(''):'');
+  }else h='<div class="empty">Add your first note on the right. Tag it with a #project to start linking.</div>';
+  hud.innerHTML=h;
+  var all=actionsOf(state.items);
+  document.getElementById('acts').innerHTML=all.length?all.map(actRow).join(''):'<div class="empty">No tasks detected yet. Phrases like “need to” or “please” create them.</div>';
+}
+
+document.addEventListener('click',function(e){var p=e.target.closest('[data-p]');if(p){state.active=p.dataset.p;document.getElementById('q').value='';render()}});
+document.addEventListener('change',function(e){var k=e.target.dataset&&e.target.dataset.k;if(k){state.done[k]=e.target.checked;save();render()}});
+document.getElementById('q').addEventListener('input',render);
+document.getElementById('add').addEventListener('click',function(){
+  var c=document.getElementById('cap'),t=c.value.trim();if(!t){c.focus();return}
+  var it=add(document.getElementById('src').value,t);c.value='';
+  if(it.e.projects[0]){state.active=it.e.projects[0];document.getElementById('q').value=''}
+  save();render();
+});
+document.getElementById('reset').addEventListener('click',function(){seed();document.getElementById('q').value='';render()});
+document.addEventListener('keydown',function(e){if(e.altKey&&e.key.toLowerCase()==='c'){e.preventDefault();document.getElementById('cap').focus()}});
+if(!load())seed();
+render();
+</script>
+</body>
+</html>
